@@ -10,9 +10,15 @@ A simple mock OpenID Connect server for development and testing purposes.
 - CORS Support
 - Simple Login UI
 
+## Running with Docker
+
+```bash
+docker run -it --rm -p 8080:8080 ghcr.io/alukach/mock-oidc-server:latest
+```
+
 ## Development Setup
 
-### Using uv (Recommended)
+### Local installation
 
 1. Install dependencies:
 
@@ -24,20 +30,6 @@ A simple mock OpenID Connect server for development and testing purposes.
 
 ```bash
 uv run app.py
-```
-
-### Using Docker
-
-1. Build the image:
-
-```bash
-docker build -t mock-oidc-server .
-```
-
-2. Run the container:
-
-```bash
-docker run -p 8888:8888 mock-oidc-server
 ```
 
 ## Configuration
