@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Generate JWT Token</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='/styles.css') }}" />
+  </head>
+  <body>
+    <div class="modal">
+      <h1>Generate JWT Token</h1>
+      <div class="mock-notice">
+        <strong>⚠️ This is a mock authentication server.</strong>
+        Don't use this in production.
+      </div>
+      <form method="POST">
+        <div class="form-group">
+          <label for="username">Username:</label>
+          <input
+            type="text"
+            id="username"
+            name="username"
+            value="user123"
+            required
+          />
+        </div>
+        <div class="form-group">
+          <label for="scopes">Scopes (space-separated):</label>
+          <input
+            type="text"
+            id="scopes"
+            name="scopes"
+            value="openid profile"
+            required
+          />
+        </div>
+        <button type="submit">Generate Token</button>
+      </form>
+      {% if token %}
+      <div class="token-container">
+        <div class="token-header">
+          <span>Generated Token</span>
+          <span class="copy-hint">Click to copy</span>
+        </div>
+        <textarea
+          id="token"
+          rows="10"
+          cols="50"
+          readonly
+          onclick="copyToken()"
+        >{{ token }}</textarea>
+      </div>
+      {% endif %}
+    </div>
+
+    <script>
+      function copyToken() {
+        const textarea = document.getElementById('token');
+        textarea.select();
+        document.execCommand('copy');
+        
+        const hint = document.querySelector('.copy-hint');
+        const originalText = hint.textContent;
+        hint.textContent = 'Copied!';
+        hint.classList.add('copied');
+        
+        setTimeout(() => {
+          hint.textContent = originalText;
+          hint.classList.remove('copied');
+        }, 2000);
+      }
+    </script>
+  </body>
+</html>

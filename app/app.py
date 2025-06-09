@@ -17,6 +17,7 @@ from cryptography.hazmat.primitives.asymmetric import rsa
 from fastapi import FastAPI, Form, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from jose import jwt
 
@@ -25,6 +26,13 @@ ISSUER = os.environ.get("ISSUER", "http://localhost:3000")
 AVAILABLE_SCOPES = os.environ.get("SCOPES", "")
 
 app = FastAPI()
+
+# Configure static files
+app.mount(
+    "/static",
+    StaticFiles(directory=str(Path(__file__).parent / "static")),
+    name="static",
+)
 
 # Configure templates
 templates = Jinja2Templates(directory=str(Path(__file__).parent / "templates"))
@@ -104,13 +112,6 @@ authorization_codes = {}
 pkce_challenges = {}
 access_tokens = {}
 auth_requests = {}
-
-
-@app.get("/")
-async def root():
-    return {
-        "message": "If you're using this in production, you are going to have a bad time."
-    }
 
 
 @app.get("/.well-known/openid-configuration")
@@ -211,6 +212,51 @@ async def login(request_id: str = Form(...)):
     params = {"code": code, "state": auth_request["state"]}
     return RedirectResponse(
         url=f"{auth_request['redirect_uri']}?{urlencode(params)}", status_code=303
+    )
+
+
+@app.get("/")
+async def token_form(request: Request):
+    """Show token generation form."""
+    return templates.TemplateResponse(
+        "token.html",
+        {
+            "request": request,
+            "token": None,
+        },
+    )
+
+
+@app.post("/")
+async def generate_token(
+    request: Request,
+    username: str = Form(...),
+    scopes: str = Form(...),
+):
+    """Generate a JWT token with the specified parameters."""
+    now = datetime.now(UTC)
+    expires_delta = timedelta(minutes=15)
+
+    token = jwt.encode(
+        {
+            "iss": ISSUER,
+            "sub": username,
+            "iat": now,
+            "exp": now + expires_delta,
+            "scope": scopes,
+            "kid": KEY_PAIR.key_id,
+        },
+        KEY_PAIR.private_key,
+        algorithm="RS256",
+        headers={"kid": KEY_PAIR.key_id},
+    )
+
+    return templates.TemplateResponse(
+        "token.html",
+        {
+            "request": request,
+            "token": token,
+        },
     )
 
 
