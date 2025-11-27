@@ -122,14 +122,29 @@ async def openid_configuration():
         "issuer": ISSUER,
         "authorization_endpoint": f"{ISSUER}/authorize",
         "token_endpoint": f"{ISSUER}/token",
+        "userinfo_endpoint": f"{ISSUER}/userinfo",
         "jwks_uri": f"{ISSUER}/.well-known/jwks.json",
         "response_types_supported": ["code"],
         "subject_types_supported": ["public"],
         "id_token_signing_alg_values_supported": ["RS256"],
         "scopes_supported": sorted(scopes_set),
         "token_endpoint_auth_methods_supported": ["client_secret_post", "none"],
-        "claims_supported": ["sub", "iss", "iat", "exp"],
+        "claims_supported": [
+            "sub",
+            "iss",
+            "aud",
+            "iat",
+            "exp",
+            "nonce",
+            "name",
+            "preferred_username",
+            "email",
+            "email_verified",
+            "picture",
+        ],
         "code_challenge_methods_supported": ["S256"],
+        "grant_types_supported": ["authorization_code"],
+        "response_modes_supported": ["query"],
     }
 
 
@@ -206,6 +221,7 @@ async def login(request_id: str = Form(...), username: str = Form(...)):
         ),
         "username": username,
         "nonce": auth_request.get("nonce"),
+        "created_at": datetime.now(UTC),
     }
 
     # Store PKCE challenge if provided
@@ -283,6 +299,14 @@ async def token(
 
     auth_details = authorization_codes[code]
 
+    # Check if authorization code has expired (10 minute lifetime)
+    code_age = datetime.now(UTC) - auth_details["created_at"]
+    if code_age > timedelta(minutes=10):
+        del authorization_codes[code]
+        if code in pkce_challenges:
+            del pkce_challenges[code]
+        raise HTTPException(status_code=400, detail="Authorization code expired")
+
     # Verify client_id matches the stored one
     if client_id != auth_details["client_id"]:
         raise HTTPException(status_code=400, detail="Client ID mismatch")
@@ -351,6 +375,14 @@ async def token(
         headers={"kid": KEY_PAIR.key_id},
     )
 
+    # Store access token for userinfo endpoint
+    access_tokens[access_token] = {
+        "username": username,
+        "scope": auth_details["scope"],
+        "client_id": client_id,
+        "expires_at": now + expires_delta,
+    }
+
     return JSONResponse(
         content={
             "access_token": access_token,
@@ -360,3 +392,48 @@ async def token(
             "scope": auth_details["scope"],
         }
     )
+
+
+@app.get("/userinfo")
+async def userinfo(request: Request):
+    """Return user claims based on the access token."""
+    # Extract the access token from the Authorization header
+    auth_header = request.headers.get("Authorization")
+    if not auth_header or not auth_header.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+
+    access_token = auth_header[7:]  # Remove "Bearer " prefix
+
+    # Verify the access token exists and is valid
+    if access_token not in access_tokens:
+        raise HTTPException(status_code=401, detail="Invalid access token")
+
+    token_data = access_tokens[access_token]
+
+    # Check if token has expired
+    if datetime.now(UTC) > token_data["expires_at"]:
+        del access_tokens[access_token]
+        raise HTTPException(status_code=401, detail="Access token expired")
+
+    # Return user claims
+    # In a real implementation, you would fetch these from a user database
+    # and filter based on the requested scopes
+    user_info = {
+        "sub": token_data["username"],
+    }
+
+    # Add profile claims if profile scope is requested
+    scopes = token_data["scope"].split()
+    if "profile" in scopes:
+        user_info.update({
+            "name": token_data["username"],
+            "preferred_username": token_data["username"],
+        })
+
+    if "email" in scopes:
+        user_info.update({
+            "email": f"{token_data['username']}@example.com",
+            "email_verified": True,
+        })
+
+    return user_info
