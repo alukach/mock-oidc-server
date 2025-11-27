@@ -149,6 +149,7 @@ async def authorize(
     scope: str = "",
     code_challenge: Optional[str] = None,
     code_challenge_method: Optional[str] = None,
+    nonce: Optional[str] = None,
 ):
     """Handle authorization request."""
     if response_type != "code":
@@ -168,6 +169,7 @@ async def authorize(
         "scope": scope,
         "code_challenge": code_challenge,
         "code_challenge_method": code_challenge_method,
+        "nonce": nonce,
     }
 
     # Show login page
@@ -184,7 +186,7 @@ async def authorize(
 
 
 @app.post("/login")
-async def login(request_id: str = Form(...)):
+async def login(request_id: str = Form(...), username: str = Form(...)):
     """Handle login form submission."""
     # Retrieve the stored auth request
     if request_id not in auth_requests:
@@ -202,6 +204,8 @@ async def login(request_id: str = Form(...)):
         "scope": " ".join(
             sorted(set(("openid profile " + auth_request["scope"]).split(" ")))
         ),
+        "username": username,
+        "nonce": auth_request.get("nonce"),
     }
 
     # Store PKCE challenge if provided
@@ -307,25 +311,50 @@ async def token(
     if code in pkce_challenges:
         del pkce_challenges[code]
 
-    # Generate access token
+    # Generate tokens
     now = datetime.now(UTC)
     expires_delta = timedelta(minutes=15)
+    username = auth_details.get("username", "user123")
+
+    # Generate access token
+    access_token = jwt.encode(
+        {
+            "iss": ISSUER,
+            "sub": username,
+            "iat": now,
+            "exp": now + expires_delta,
+            "scope": auth_details["scope"],
+            "kid": KEY_PAIR.key_id,
+        },
+        KEY_PAIR.private_key,
+        algorithm="RS256",
+        headers={"kid": KEY_PAIR.key_id},
+    )
+
+    # Generate ID token (required for OIDC)
+    id_token_claims = {
+        "iss": ISSUER,
+        "sub": username,
+        "aud": client_id,
+        "iat": now,
+        "exp": now + expires_delta,
+    }
+
+    # Include nonce if it was provided in the auth request
+    if auth_details.get("nonce"):
+        id_token_claims["nonce"] = auth_details["nonce"]
+
+    id_token = jwt.encode(
+        id_token_claims,
+        KEY_PAIR.private_key,
+        algorithm="RS256",
+        headers={"kid": KEY_PAIR.key_id},
+    )
 
     return JSONResponse(
         content={
-            "access_token": jwt.encode(
-                {
-                    "iss": ISSUER,
-                    "sub": "user123",
-                    "iat": now,
-                    "exp": now + expires_delta,
-                    "scope": auth_details["scope"],
-                    "kid": KEY_PAIR.key_id,
-                },
-                KEY_PAIR.private_key,
-                algorithm="RS256",
-                headers={"kid": KEY_PAIR.key_id},
-            ),
+            "access_token": access_token,
+            "id_token": id_token,
             "token_type": "Bearer",
             "expires_in": expires_delta.seconds,
             "scope": auth_details["scope"],
