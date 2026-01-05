@@ -119,15 +119,16 @@ auth_requests = {}
 
 
 @app.get("/.well-known/openid-configuration")
-async def openid_configuration():
+async def openid_configuration(prefix: str = ""):
     """Return OpenID Connect configuration."""
+    base = f"{ISSUER}/{prefix}" if prefix else ISSUER
     scopes_set = set(["openid", "profile", *AVAILABLE_SCOPES.split(",")])
     return {
         "issuer": ISSUER,
-        "authorization_endpoint": f"{ISSUER}/authorize",
-        "token_endpoint": f"{ISSUER}/token",
-        "userinfo_endpoint": f"{ISSUER}/userinfo",
-        "jwks_uri": f"{ISSUER}/.well-known/jwks.json",
+        "authorization_endpoint": f"{base}/authorize",
+        "token_endpoint": f"{base}/token",
+        "userinfo_endpoint": f"{base}/userinfo",
+        "jwks_uri": f"{base}/.well-known/jwks.json",
         "response_types_supported": ["code"],
         "subject_types_supported": ["public"],
         "id_token_signing_alg_values_supported": ["RS256"],
@@ -150,6 +151,12 @@ async def openid_configuration():
         "grant_types_supported": ["authorization_code"],
         "response_modes_supported": ["query"],
     }
+
+
+@app.get("/{prefix:path}/.well-known/openid-configuration")
+async def openid_configuration_prefixed(prefix: str):
+    """Return OpenID Connect configuration with path prefix support."""
+    return await openid_configuration(prefix)
 
 
 @app.get("/.well-known/jwks.json")
@@ -175,6 +182,7 @@ async def authorize(
     code_challenge: Optional[str] = None,
     code_challenge_method: Optional[str] = None,
     nonce: Optional[str] = None,
+    prefix: str = "",
 ):
     """Handle authorization request."""
     if response_type != "code":
@@ -200,6 +208,7 @@ async def authorize(
     }
 
     # Show login page
+    base = f"{ISSUER}/{prefix}" if prefix else ISSUER
     scopes = sorted(set(("openid profile " + scope).split()))
     return templates.TemplateResponse(
         "login.html",
@@ -208,8 +217,36 @@ async def authorize(
             "request_id": request_id,
             "client_id": client_id,
             "scopes": scopes,
-            "issuer": ISSUER,
+            "issuer": base,
         },
+    )
+
+
+@app.get("/{prefix:path}/authorize")
+async def authorize_prefixed(
+    prefix: str,
+    request: Request,
+    response_type: str,
+    client_id: str,
+    redirect_uri: str,
+    state: str,
+    scope: str = "",
+    code_challenge: Optional[str] = None,
+    code_challenge_method: Optional[str] = None,
+    nonce: Optional[str] = None,
+):
+    """Handle authorization request with path prefix support."""
+    return await authorize(
+        request,
+        response_type,
+        client_id,
+        redirect_uri,
+        state,
+        scope,
+        code_challenge,
+        code_challenge_method,
+        nonce,
+        prefix,
     )
 
 
@@ -247,6 +284,14 @@ async def login(request_id: str = Form(...), username: str = Form(...)):
         url=f"{auth_request['redirect_uri']}?{urlencode(params)}",
         status_code=303,
     )
+
+
+@app.post("/{prefix:path}/login")
+async def login_prefixed(
+    prefix: str, request_id: str = Form(...), username: str = Form(...)
+):
+    """Handle login form submission with path prefix support."""
+    return await login(request_id, username)
 
 
 @app.get("/")
@@ -414,6 +459,22 @@ async def token(
     )
 
 
+@app.post("/{prefix:path}/token")
+async def token_prefixed(
+    prefix: str,
+    grant_type: str = Form(...),
+    code: str = Form(...),
+    redirect_uri: str = Form(...),
+    client_id: str = Form(...),
+    client_secret: Optional[str] = Form(None),
+    code_verifier: Optional[str] = Form(None),
+):
+    """Handle token request with path prefix support."""
+    return await token(
+        grant_type, code, redirect_uri, client_id, client_secret, code_verifier
+    )
+
+
 @app.get("/userinfo")
 async def userinfo(request: Request):
     """Return user claims based on the access token."""
@@ -463,3 +524,9 @@ async def userinfo(request: Request):
         )
 
     return user_info
+
+
+@app.get("/{prefix:path}/userinfo")
+async def userinfo_prefixed(prefix: str, request: Request):
+    """Return user claims with path prefix support."""
+    return await userinfo(request)

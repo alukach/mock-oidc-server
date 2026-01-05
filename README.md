@@ -43,15 +43,16 @@ The server can be configured using environment variables:
 ## Endpoints
 
 - `/.well-known/openid-configuration`: OIDC configuration endpoint
-- `/.well-known/jwks.json`: JSON Web Key Set endpoint (supports path prefixes, e.g., `/mock-oidc/.well-known/jwks.json`)
+- `/.well-known/jwks.json`: JSON Web Key Set endpoint
 - `/authorize`: Authorization endpoint
 - `/token`: Token endpoint
+- `/userinfo`: User info endpoint
 
 ### Path Prefix Support
 
-The JWKS endpoint supports path prefixes for ingress routing:
-- `/.well-known/jwks.json` (direct access)
-- `/{any-prefix}/.well-known/jwks.json` (with prefix, e.g., `/mock-oidc/.well-known/jwks.json`)
+All OIDC endpoints support path prefixes for ingress routing:
+- Direct: `/.well-known/openid-configuration`, `/authorize`, `/token`, etc.
+- Prefixed: `/{prefix}/.well-known/openid-configuration`, `/{prefix}/authorize`, `/{prefix}/token`, etc.
 
 ## Warning
 
