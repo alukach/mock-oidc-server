@@ -6,6 +6,7 @@ import base64
 import hashlib
 import json
 import os
+import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -24,12 +25,42 @@ from jose import jwt
 # Configuration
 ISSUER = os.environ.get("ISSUER", "http://localhost:3000")
 AVAILABLE_SCOPES = os.environ.get("SCOPES", "")
+STATIC_PATH_PREFIX = os.environ.get("STATIC_PATH_PREFIX", "")
+
+# Prefix validation
+VALID_PREFIX_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
 
 app = FastAPI()
 
+
+def validate_prefix(prefix: str) -> str:
+    """Validate and normalize path prefix."""
+    if not prefix:
+        return ""
+    prefix = prefix.strip("/")
+    if not VALID_PREFIX_PATTERN.match(prefix):
+        raise HTTPException(
+            400, "Invalid prefix: must be alphanumeric with hyphens/underscores"
+        )
+    return prefix
+
+
+def build_url(endpoint: str, prefix: str = "") -> str:
+    """Build endpoint URL with optional prefix."""
+    base = ISSUER.rstrip("/")
+    prefix = validate_prefix(prefix)
+    endpoint = endpoint.lstrip("/")
+    return f"{base}/{prefix}/{endpoint}" if prefix else f"{base}/{endpoint}"
+
+
 # Configure static files
+static_mount_path = (
+    f"/{STATIC_PATH_PREFIX.strip('/')}/static"
+    if STATIC_PATH_PREFIX
+    else "/static"
+)
 app.mount(
-    "/static",
+    static_mount_path,
     StaticFiles(directory=str(Path(__file__).parent / "static")),
     name="static",
 )
@@ -121,14 +152,14 @@ auth_requests = {}
 @app.get("/.well-known/openid-configuration")
 async def openid_configuration(prefix: str = ""):
     """Return OpenID Connect configuration."""
-    base = f"{ISSUER}/{prefix}" if prefix else ISSUER
+    prefix = validate_prefix(prefix)
     scopes_set = set(["openid", "profile", *AVAILABLE_SCOPES.split(",")])
     return {
         "issuer": ISSUER,
-        "authorization_endpoint": f"{base}/authorize",
-        "token_endpoint": f"{base}/token",
-        "userinfo_endpoint": f"{base}/userinfo",
-        "jwks_uri": f"{base}/.well-known/jwks.json",
+        "authorization_endpoint": build_url("authorize", prefix),
+        "token_endpoint": build_url("token", prefix),
+        "userinfo_endpoint": build_url("userinfo", prefix),
+        "jwks_uri": build_url(".well-known/jwks.json", prefix),
         "response_types_supported": ["code"],
         "subject_types_supported": ["public"],
         "id_token_signing_alg_values_supported": ["RS256"],
@@ -168,6 +199,7 @@ async def jwks():
 @app.get("/{prefix:path}/.well-known/jwks.json")
 async def jwks_prefixed(prefix: str):
     """Return JWKS with path prefix support for ingress routing."""
+    validate_prefix(prefix)
     return KEY_PAIR.jwks
 
 
@@ -208,7 +240,8 @@ async def authorize(
     }
 
     # Show login page
-    base = f"{ISSUER}/{prefix}" if prefix else ISSUER
+    prefix = validate_prefix(prefix)
+    login_url = build_url("login", prefix)
     scopes = sorted(set(("openid profile " + scope).split()))
     return templates.TemplateResponse(
         "login.html",
@@ -217,15 +250,15 @@ async def authorize(
             "request_id": request_id,
             "client_id": client_id,
             "scopes": scopes,
-            "issuer": base,
+            "login_url": login_url,
         },
     )
 
 
 @app.get("/{prefix:path}/authorize")
 async def authorize_prefixed(
-    prefix: str,
     request: Request,
+    prefix: str,
     response_type: str,
     client_id: str,
     redirect_uri: str,
@@ -291,6 +324,7 @@ async def login_prefixed(
     prefix: str, request_id: str = Form(...), username: str = Form(...)
 ):
     """Handle login form submission with path prefix support."""
+    validate_prefix(prefix)
     return await login(request_id, username)
 
 
@@ -470,6 +504,7 @@ async def token_prefixed(
     code_verifier: Optional[str] = Form(None),
 ):
     """Handle token request with path prefix support."""
+    validate_prefix(prefix)
     return await token(
         grant_type, code, redirect_uri, client_id, client_secret, code_verifier
     )
@@ -529,4 +564,5 @@ async def userinfo(request: Request):
 @app.get("/{prefix:path}/userinfo")
 async def userinfo_prefixed(prefix: str, request: Request):
     """Return user claims with path prefix support."""
+    validate_prefix(prefix)
     return await userinfo(request)
