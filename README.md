@@ -39,7 +39,7 @@ The server can be configured using environment variables:
 - `ISSUER`: The OIDC issuer URL (default: http://localhost:3000)
 - `SCOPES`: Additional scopes to support (comma-separated)
 - `PORT`: The port to run on (default: 8888)
-- `STATIC_PATH_PREFIX`: Path prefix for static files when behind ingress (optional)
+- `ROOT_PATH`: Path prefix when behind a reverse proxy (optional)
 
 ## Endpoints
 
@@ -49,11 +49,7 @@ The server can be configured using environment variables:
 - `/token`: Token endpoint
 - `/userinfo`: User info endpoint
 
-### Path Prefix Support
 
-All OIDC endpoints support path prefixes for ingress routing:
-- Direct: `/.well-known/openid-configuration`, `/authorize`, `/token`, etc.
-- Prefixed: `/{prefix}/.well-known/openid-configuration`, `/{prefix}/authorize`, `/{prefix}/token`, etc.
 
 ## Warning
 

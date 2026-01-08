@@ -6,7 +6,6 @@ import base64
 import hashlib
 import json
 import os
-import re
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
@@ -25,42 +24,22 @@ from jose import jwt
 # Configuration
 ISSUER = os.environ.get("ISSUER", "http://localhost:3000")
 AVAILABLE_SCOPES = os.environ.get("SCOPES", "")
-STATIC_PATH_PREFIX = os.environ.get("STATIC_PATH_PREFIX", "")
+ROOT_PATH = os.environ.get("ROOT_PATH", "")
 
-# Prefix validation
-VALID_PREFIX_PATTERN = re.compile(r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
-
-app = FastAPI()
+app = FastAPI(root_path=ROOT_PATH)
 
 
-def validate_prefix(prefix: str) -> str:
-    """Validate and normalize path prefix."""
-    if not prefix:
-        return ""
-    prefix = prefix.strip("/")
-    if not VALID_PREFIX_PATTERN.match(prefix):
-        raise HTTPException(
-            400, "Invalid prefix: must be alphanumeric with hyphens/underscores"
-        )
-    return prefix
-
-
-def build_url(endpoint: str, prefix: str = "") -> str:
-    """Build endpoint URL with optional prefix."""
+def build_url(endpoint: str) -> str:
+    """Build endpoint URL with root_path."""
     base = ISSUER.rstrip("/")
-    prefix = validate_prefix(prefix)
+    root = app.root_path.strip("/")
     endpoint = endpoint.lstrip("/")
-    return f"{base}/{prefix}/{endpoint}" if prefix else f"{base}/{endpoint}"
+    return f"{base}/{root}/{endpoint}" if root else f"{base}/{endpoint}"
 
 
 # Configure static files
-static_mount_path = (
-    f"/{STATIC_PATH_PREFIX.strip('/')}/static"
-    if STATIC_PATH_PREFIX
-    else "/static"
-)
 app.mount(
-    static_mount_path,
+    "/static",
     StaticFiles(directory=str(Path(__file__).parent / "static")),
     name="static",
 )
@@ -150,16 +129,15 @@ auth_requests = {}
 
 
 @app.get("/.well-known/openid-configuration")
-async def openid_configuration(prefix: str = ""):
+async def openid_configuration():
     """Return OpenID Connect configuration."""
-    prefix = validate_prefix(prefix)
     scopes_set = set(["openid", "profile", *AVAILABLE_SCOPES.split(",")])
     return {
         "issuer": ISSUER,
-        "authorization_endpoint": build_url("authorize", prefix),
-        "token_endpoint": build_url("token", prefix),
-        "userinfo_endpoint": build_url("userinfo", prefix),
-        "jwks_uri": build_url(".well-known/jwks.json", prefix),
+        "authorization_endpoint": build_url("authorize"),
+        "token_endpoint": build_url("token"),
+        "userinfo_endpoint": build_url("userinfo"),
+        "jwks_uri": build_url(".well-known/jwks.json"),
         "response_types_supported": ["code"],
         "subject_types_supported": ["public"],
         "id_token_signing_alg_values_supported": ["RS256"],
@@ -184,22 +162,9 @@ async def openid_configuration(prefix: str = ""):
     }
 
 
-@app.get("/{prefix:path}/.well-known/openid-configuration")
-async def openid_configuration_prefixed(prefix: str):
-    """Return OpenID Connect configuration with path prefix support."""
-    return await openid_configuration(prefix)
-
-
 @app.get("/.well-known/jwks.json")
 async def jwks():
     """Return JWKS (JSON Web Key Set)."""
-    return KEY_PAIR.jwks
-
-
-@app.get("/{prefix:path}/.well-known/jwks.json")
-async def jwks_prefixed(prefix: str):
-    """Return JWKS with path prefix support for ingress routing."""
-    validate_prefix(prefix)
     return KEY_PAIR.jwks
 
 
@@ -214,7 +179,6 @@ async def authorize(
     code_challenge: Optional[str] = None,
     code_challenge_method: Optional[str] = None,
     nonce: Optional[str] = None,
-    prefix: str = "",
 ):
     """Handle authorization request."""
     if response_type != "code":
@@ -240,8 +204,7 @@ async def authorize(
     }
 
     # Show login page
-    prefix = validate_prefix(prefix)
-    login_url = build_url("login", prefix)
+    login_url = build_url("login")
     scopes = sorted(set(("openid profile " + scope).split()))
     return templates.TemplateResponse(
         "login.html",
@@ -252,34 +215,6 @@ async def authorize(
             "scopes": scopes,
             "login_url": login_url,
         },
-    )
-
-
-@app.get("/{prefix:path}/authorize")
-async def authorize_prefixed(
-    request: Request,
-    prefix: str,
-    response_type: str,
-    client_id: str,
-    redirect_uri: str,
-    state: str,
-    scope: str = "",
-    code_challenge: Optional[str] = None,
-    code_challenge_method: Optional[str] = None,
-    nonce: Optional[str] = None,
-):
-    """Handle authorization request with path prefix support."""
-    return await authorize(
-        request,
-        response_type,
-        client_id,
-        redirect_uri,
-        state,
-        scope,
-        code_challenge,
-        code_challenge_method,
-        nonce,
-        prefix,
     )
 
 
@@ -317,15 +252,6 @@ async def login(request_id: str = Form(...), username: str = Form(...)):
         url=f"{auth_request['redirect_uri']}?{urlencode(params)}",
         status_code=303,
     )
-
-
-@app.post("/{prefix:path}/login")
-async def login_prefixed(
-    prefix: str, request_id: str = Form(...), username: str = Form(...)
-):
-    """Handle login form submission with path prefix support."""
-    validate_prefix(prefix)
-    return await login(request_id, username)
 
 
 @app.get("/")
@@ -493,23 +419,6 @@ async def token(
     )
 
 
-@app.post("/{prefix:path}/token")
-async def token_prefixed(
-    prefix: str,
-    grant_type: str = Form(...),
-    code: str = Form(...),
-    redirect_uri: str = Form(...),
-    client_id: str = Form(...),
-    client_secret: Optional[str] = Form(None),
-    code_verifier: Optional[str] = Form(None),
-):
-    """Handle token request with path prefix support."""
-    validate_prefix(prefix)
-    return await token(
-        grant_type, code, redirect_uri, client_id, client_secret, code_verifier
-    )
-
-
 @app.get("/userinfo")
 async def userinfo(request: Request):
     """Return user claims based on the access token."""
@@ -559,10 +468,3 @@ async def userinfo(request: Request):
         )
 
     return user_info
-
-
-@app.get("/{prefix:path}/userinfo")
-async def userinfo_prefixed(prefix: str, request: Request):
-    """Return user claims with path prefix support."""
-    validate_prefix(prefix)
-    return await userinfo(request)
