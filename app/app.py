@@ -24,8 +24,18 @@ from jose import jwt
 # Configuration
 ISSUER = os.environ.get("ISSUER", "http://localhost:3000")
 AVAILABLE_SCOPES = os.environ.get("SCOPES", "")
+ROOT_PATH = os.environ.get("ROOT_PATH", "")
 
-app = FastAPI()
+app = FastAPI(root_path=ROOT_PATH)
+
+
+def build_url(endpoint: str) -> str:
+    """Build endpoint URL with root_path."""
+    base = ISSUER.rstrip("/")
+    root = app.root_path.strip("/")
+    endpoint = endpoint.lstrip("/")
+    return f"{base}/{root}/{endpoint}" if root else f"{base}/{endpoint}"
+
 
 # Configure static files
 app.mount(
@@ -67,7 +77,9 @@ class KeyPair:
             return
 
         # Generate keys
-        private_key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+        private_key = rsa.generate_private_key(
+            public_exponent=65537, key_size=2048
+        )
         private_pem = private_key.private_bytes(
             encoding=serialization.Encoding.PEM,
             format=serialization.PrivateFormat.PKCS8,
@@ -101,7 +113,9 @@ class KeyPair:
         if len(value_hex) % 2 == 1:
             value_hex = "0" + value_hex
         value_bytes = bytes.fromhex(value_hex)
-        return base64.urlsafe_b64encode(value_bytes).rstrip(b"=").decode("ascii")
+        return (
+            base64.urlsafe_b64encode(value_bytes).rstrip(b"=").decode("ascii")
+        )
 
 
 # Load or generate key pair on startup
@@ -120,10 +134,10 @@ async def openid_configuration():
     scopes_set = set(["openid", "profile", *AVAILABLE_SCOPES.split(",")])
     return {
         "issuer": ISSUER,
-        "authorization_endpoint": f"{ISSUER}/authorize",
-        "token_endpoint": f"{ISSUER}/token",
-        "userinfo_endpoint": f"{ISSUER}/userinfo",
-        "jwks_uri": f"{ISSUER}/.well-known/jwks.json",
+        "authorization_endpoint": build_url("authorize"),
+        "token_endpoint": build_url("token"),
+        "userinfo_endpoint": build_url("userinfo"),
+        "jwks_uri": build_url(".well-known/jwks.json"),
         "response_types_supported": ["code"],
         "subject_types_supported": ["public"],
         "id_token_signing_alg_values_supported": ["RS256"],
@@ -173,7 +187,9 @@ async def authorize(
     # Validate PKCE if provided
     if code_challenge is not None:
         if code_challenge_method != "S256":
-            raise HTTPException(status_code=400, detail="Only S256 PKCE is supported")
+            raise HTTPException(
+                status_code=400, detail="Only S256 PKCE is supported"
+            )
 
     # Store the auth request details
     request_id = os.urandom(16).hex()
@@ -188,6 +204,7 @@ async def authorize(
     }
 
     # Show login page
+    login_url = build_url("login")
     scopes = sorted(set(("openid profile " + scope).split()))
     return templates.TemplateResponse(
         "login.html",
@@ -196,6 +213,7 @@ async def authorize(
             "request_id": request_id,
             "client_id": client_id,
             "scopes": scopes,
+            "login_url": login_url,
         },
     )
 
@@ -231,7 +249,8 @@ async def login(request_id: str = Form(...), username: str = Form(...)):
     # Redirect back to client with the code
     params = {"code": code, "state": auth_request["state"]}
     return RedirectResponse(
-        url=f"{auth_request['redirect_uri']}?{urlencode(params)}", status_code=303
+        url=f"{auth_request['redirect_uri']}?{urlencode(params)}",
+        status_code=303,
     )
 
 
@@ -295,7 +314,9 @@ async def token(
 
     # Verify the authorization code exists
     if code not in authorization_codes:
-        raise HTTPException(status_code=400, detail="Invalid authorization code")
+        raise HTTPException(
+            status_code=400, detail="Invalid authorization code"
+        )
 
     auth_details = authorization_codes[code]
 
@@ -305,7 +326,9 @@ async def token(
         del authorization_codes[code]
         if code in pkce_challenges:
             del pkce_challenges[code]
-        raise HTTPException(status_code=400, detail="Authorization code expired")
+        raise HTTPException(
+            status_code=400, detail="Authorization code expired"
+        )
 
     # Verify client_id matches the stored one
     if client_id != auth_details["client_id"]:
@@ -318,7 +341,9 @@ async def token(
     # Check if PKCE was used in the authorization request
     if code in pkce_challenges:
         if not code_verifier:
-            raise HTTPException(status_code=400, detail="Code verifier required")
+            raise HTTPException(
+                status_code=400, detail="Code verifier required"
+            )
 
         # Verify the code verifier
         code_challenge = pkce_challenges[code]
@@ -400,7 +425,9 @@ async def userinfo(request: Request):
     # Extract the access token from the Authorization header
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+        raise HTTPException(
+            status_code=401, detail="Missing or invalid Authorization header"
+        )
 
     access_token = auth_header[7:]  # Remove "Bearer " prefix
 
@@ -425,15 +452,19 @@ async def userinfo(request: Request):
     # Add profile claims if profile scope is requested
     scopes = token_data["scope"].split()
     if "profile" in scopes:
-        user_info.update({
-            "name": token_data["username"],
-            "preferred_username": token_data["username"],
-        })
+        user_info.update(
+            {
+                "name": token_data["username"],
+                "preferred_username": token_data["username"],
+            }
+        )
 
     if "email" in scopes:
-        user_info.update({
-            "email": f"{token_data['username']}@example.com",
-            "email_verified": True,
-        })
+        user_info.update(
+            {
+                "email": f"{token_data['username']}@example.com",
+                "email_verified": True,
+            }
+        )
 
     return user_info

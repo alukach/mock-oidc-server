@@ -39,6 +39,7 @@ The server can be configured using environment variables:
 - `ISSUER`: The OIDC issuer URL (default: http://localhost:3000)
 - `SCOPES`: Additional scopes to support (comma-separated)
 - `PORT`: The port to run on (default: 8888)
+- `ROOT_PATH`: Path prefix when behind a reverse proxy (optional)
 
 ## Endpoints
 
@@ -46,6 +47,9 @@ The server can be configured using environment variables:
 - `/.well-known/jwks.json`: JSON Web Key Set endpoint
 - `/authorize`: Authorization endpoint
 - `/token`: Token endpoint
+- `/userinfo`: User info endpoint
+
+
 
 ## Warning
 
