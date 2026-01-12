@@ -28,9 +28,9 @@ docker run -it --rm -p 8080:8080 ghcr.io/alukach/mock-oidc-server:latest
 
 2. Run the server:
 
-```bash
-uv run app.py
-```
+   ```bash
+   uv run python -m app
+   ```
 
 ## Configuration
 
