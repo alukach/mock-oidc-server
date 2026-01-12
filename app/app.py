@@ -10,7 +10,7 @@ from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from cryptography.hazmat.primitives import serialization
 from cryptography.hazmat.primitives.asymmetric import rsa
@@ -24,8 +24,7 @@ from jose import jwt
 # Configuration
 ISSUER = os.environ.get("ISSUER", "http://localhost:3000")
 AVAILABLE_SCOPES = os.environ.get("SCOPES", "")
-
-app = FastAPI(root_path=os.environ.get("ROOT_PATH", ""))
+app = FastAPI(root_path=urlparse(ISSUER).path.rstrip("/"))
 
 # Configure static files
 app.mount(
@@ -115,15 +114,15 @@ auth_requests = {}
 
 
 @app.get("/.well-known/openid-configuration")
-async def openid_configuration():
+async def openid_configuration(request: Request):
     """Return OpenID Connect configuration."""
     scopes_set = set(["openid", "profile", *AVAILABLE_SCOPES.split(",")])
     return {
         "issuer": ISSUER,
-        "authorization_endpoint": f"{ISSUER}/authorize",
-        "token_endpoint": f"{ISSUER}/token",
-        "userinfo_endpoint": f"{ISSUER}/userinfo",
-        "jwks_uri": f"{ISSUER}/.well-known/jwks.json",
+        "authorization_endpoint": request.url_for("authorize"),
+        "token_endpoint": request.url_for("token"),
+        "userinfo_endpoint": request.url_for("userinfo"),
+        "jwks_uri": request.url_for("jwks"),
         "response_types_supported": ["code"],
         "subject_types_supported": ["public"],
         "id_token_signing_alg_values_supported": ["RS256"],
@@ -148,13 +147,13 @@ async def openid_configuration():
     }
 
 
-@app.get("/.well-known/jwks.json")
+@app.get("/.well-known/jwks.json", name="jwks")
 async def jwks():
     """Return JWKS (JSON Web Key Set)."""
     return KEY_PAIR.jwks
 
 
-@app.get("/authorize")
+@app.get("/authorize", name="authorize")
 async def authorize(
     request: Request,
     response_type: str,
@@ -200,7 +199,7 @@ async def authorize(
     )
 
 
-@app.post("/login")
+@app.post("/login", name="login")
 async def login(request_id: str = Form(...), username: str = Form(...)):
     """Handle login form submission."""
     # Retrieve the stored auth request
@@ -280,7 +279,7 @@ async def generate_token(
     )
 
 
-@app.post("/token")
+@app.post("/token", name="token")
 async def token(
     grant_type: str = Form(...),
     code: str = Form(...),
@@ -394,7 +393,7 @@ async def token(
     )
 
 
-@app.get("/userinfo")
+@app.get("/userinfo", name="userinfo")
 async def userinfo(request: Request):
     """Return user claims based on the access token."""
     # Extract the access token from the Authorization header
