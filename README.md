@@ -36,7 +36,7 @@ docker run -it --rm -p 8080:8080 ghcr.io/alukach/mock-oidc-server:latest
 
 The server can be configured using environment variables:
 
-- `ISSUER`: The OIDC issuer URL (default: http://localhost:3000)
+- `ISSUER`: The OIDC issuer URL, including path when served at non-root (default: http://localhost:3000)
 - `SCOPES`: Additional scopes to support (comma-separated)
 - `PORT`: The port to run on (default: 8888)
 
