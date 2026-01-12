@@ -25,7 +25,7 @@ from jose import jwt
 ISSUER = os.environ.get("ISSUER", "http://localhost:3000")
 AVAILABLE_SCOPES = os.environ.get("SCOPES", "")
 
-app = FastAPI()
+app = FastAPI(root_path=os.environ.get("ROOT_PATH", ""))
 
 # Configure static files
 app.mount(
@@ -400,7 +400,9 @@ async def userinfo(request: Request):
     # Extract the access token from the Authorization header
     auth_header = request.headers.get("Authorization")
     if not auth_header or not auth_header.startswith("Bearer "):
-        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+        raise HTTPException(
+            status_code=401, detail="Missing or invalid Authorization header"
+        )
 
     access_token = auth_header[7:]  # Remove "Bearer " prefix
 
@@ -425,15 +427,19 @@ async def userinfo(request: Request):
     # Add profile claims if profile scope is requested
     scopes = token_data["scope"].split()
     if "profile" in scopes:
-        user_info.update({
-            "name": token_data["username"],
-            "preferred_username": token_data["username"],
-        })
+        user_info.update(
+            {
+                "name": token_data["username"],
+                "preferred_username": token_data["username"],
+            }
+        )
 
     if "email" in scopes:
-        user_info.update({
-            "email": f"{token_data['username']}@example.com",
-            "email_verified": True,
-        })
+        user_info.update(
+            {
+                "email": f"{token_data['username']}@example.com",
+                "email_verified": True,
+            }
+        )
 
     return user_info
