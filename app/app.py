@@ -119,10 +119,10 @@ async def openid_configuration(request: Request):
     scopes_set = set(["openid", "profile", *AVAILABLE_SCOPES.split(",")])
     return {
         "issuer": ISSUER,
-        "authorization_endpoint": request.url_for("authorize"),
-        "token_endpoint": request.url_for("token"),
-        "userinfo_endpoint": request.url_for("userinfo"),
-        "jwks_uri": request.url_for("jwks"),
+        "authorization_endpoint": str(request.url_for("authorize")),
+        "token_endpoint": str(request.url_for("token")),
+        "userinfo_endpoint": str(request.url_for("userinfo")),
+        "jwks_uri": str(request.url_for("jwks")),
         "response_types_supported": ["code"],
         "subject_types_supported": ["public"],
         "id_token_signing_alg_values_supported": ["RS256"],
