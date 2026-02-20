@@ -32,21 +32,28 @@
             required
           />
         </div>
+        {% include "_claims_editor.html" %}
         <button type="submit">Generate Token</button>
       </form>
       {% if token %}
       <div class="token-container">
         <div class="token-header">
-          <span>Generated Token</span>
+          <span>Encoded Token</span>
           <span class="copy-hint">Click to copy</span>
         </div>
         <textarea
           id="token"
-          rows="10"
+          rows="6"
           cols="50"
           readonly
           onclick="copyToken()"
         >{{ token }}</textarea>
+      </div>
+      <div class="token-container">
+        <div class="token-header">
+          <span>Token Body</span>
+        </div>
+        <pre id="token-body">{{ token_body | tojson(indent=2) }}</pre>
       </div>
       {% endif %}
     </div>
@@ -56,12 +63,12 @@
         const textarea = document.getElementById('token');
         textarea.select();
         document.execCommand('copy');
-        
+
         const hint = document.querySelector('.copy-hint');
         const originalText = hint.textContent;
         hint.textContent = 'Copied!';
         hint.classList.add('copied');
-        
+
         setTimeout(() => {
           hint.textContent = originalText;
           hint.classList.remove('copied');

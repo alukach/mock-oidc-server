@@ -195,16 +195,29 @@ async def authorize(
             "request_id": request_id,
             "client_id": client_id,
             "scopes": scopes,
+            "claims": {},
         },
     )
 
 
 @app.post("/login", name="login")
-async def login(request_id: str = Form(...), username: str = Form(...)):
+async def login(
+    request_id: str = Form(...),
+    username: str = Form(...),
+    claims: str = Form("{}"),
+):
     """Handle login form submission."""
     # Retrieve the stored auth request
     if request_id not in auth_requests:
         raise HTTPException(status_code=400, detail="Invalid request")
+
+    # Parse custom claims
+    try:
+        custom_claims = json.loads(claims)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON in claims")
+    if not isinstance(custom_claims, dict):
+        raise HTTPException(status_code=400, detail="Claims must be a JSON object")
 
     auth_request = auth_requests.pop(request_id)
 
@@ -221,6 +234,7 @@ async def login(request_id: str = Form(...), username: str = Form(...)):
         "username": username,
         "nonce": auth_request.get("nonce"),
         "created_at": datetime.now(UTC),
+        "custom_claims": custom_claims,
     }
 
     # Store PKCE challenge if provided
@@ -242,6 +256,7 @@ async def token_form(request: Request):
         {
             "request": request,
             "token": None,
+            "claims": {},
         },
     )
 
@@ -251,30 +266,49 @@ async def generate_token(
     request: Request,
     username: str = Form(...),
     scopes: str = Form(...),
+    claims: str = Form("{}"),
 ):
     """Generate a JWT token with the specified parameters."""
+    try:
+        custom_claims = json.loads(claims)
+    except json.JSONDecodeError:
+        raise HTTPException(status_code=400, detail="Invalid JSON in claims")
+    if not isinstance(custom_claims, dict):
+        raise HTTPException(status_code=400, detail="Claims must be a JSON object")
+
     now = datetime.now(UTC)
     expires_delta = timedelta(minutes=15)
 
+    token_body = {
+        **custom_claims,
+        "iss": ISSUER,
+        "sub": username,
+        "iat": now,
+        "exp": now + expires_delta,
+        "scope": scopes,
+        "kid": KEY_PAIR.key_id,
+    }
+
     token = jwt.encode(
-        {
-            "iss": ISSUER,
-            "sub": username,
-            "iat": now,
-            "exp": now + expires_delta,
-            "scope": scopes,
-            "kid": KEY_PAIR.key_id,
-        },
+        token_body,
         KEY_PAIR.private_key,
         algorithm="RS256",
         headers={"kid": KEY_PAIR.key_id},
     )
+
+    # Convert datetime objects for JSON display
+    token_body_display = {
+        k: v.isoformat() if isinstance(v, datetime) else v
+        for k, v in token_body.items()
+    }
 
     return templates.TemplateResponse(
         "token.html",
         {
             "request": request,
             "token": token,
+            "token_body": token_body_display,
+            "claims": custom_claims,
         },
     )
 
@@ -339,9 +373,13 @@ async def token(
     expires_delta = timedelta(minutes=15)
     username = auth_details.get("username", "user123")
 
+    # Merge custom claims into tokens (custom claims go first so standard claims win)
+    custom_claims = auth_details.get("custom_claims", {})
+
     # Generate access token
     access_token = jwt.encode(
         {
+            **custom_claims,
             "iss": ISSUER,
             "sub": username,
             "iat": now,
@@ -356,6 +394,7 @@ async def token(
 
     # Generate ID token (required for OIDC)
     id_token_claims = {
+        **custom_claims,
         "iss": ISSUER,
         "sub": username,
         "aud": client_id,
@@ -380,6 +419,7 @@ async def token(
         "scope": auth_details["scope"],
         "client_id": client_id,
         "expires_at": now + expires_delta,
+        "custom_claims": custom_claims,
     }
 
     return JSONResponse(
@@ -420,6 +460,7 @@ async def userinfo(request: Request):
     # In a real implementation, you would fetch these from a user database
     # and filter based on the requested scopes
     user_info = {
+        **token_data.get("custom_claims", {}),
         "sub": token_data["username"],
     }
 

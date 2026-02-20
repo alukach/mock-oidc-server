@@ -1,0 +1,19 @@
+<div class="form-group">
+  <div class="claims-label-row">
+    <label>Custom Claims:</label>
+    <button type="button" id="claims-mode-toggle" class="claims-toggle">JSON</button>
+  </div>
+  <input type="hidden" id="claims" name="claims" value="{}" />
+  <div id="claims-editor" class="claims-editor"></div>
+  <textarea id="claims-raw" class="claims-raw" rows="4" placeholder='{"groups": ["admin"], "org": "acme"}' style="display: none;"></textarea>
+</div>
+<script src="{{ url_for('static', path='/claims-editor.js') }}"></script>
+<script>
+  initClaimsEditor(
+    "claims-editor",
+    "claims-raw",
+    "claims",
+    "claims-mode-toggle",
+    {{ claims | tojson }}
+  );
+</script>

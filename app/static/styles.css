@@ -148,6 +148,21 @@ button:hover {
   color: #28a745;
 }
 
+#token-body {
+  background: #f8f9fa;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 12px;
+  font-family: monospace;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  text-align: left;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-break: break-word;
+  margin: 0;
+}
+
 #token {
   cursor: pointer;
   font-family: monospace;
@@ -165,4 +180,113 @@ button:hover {
   outline: none;
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.claims-label-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.claims-label-row label {
+  margin-bottom: 0;
+}
+
+.claims-toggle {
+  background: none;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  color: #666;
+  cursor: pointer;
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  text-transform: none;
+  font-weight: normal;
+}
+
+.claims-toggle:hover {
+  background-color: #f0f7ff;
+  border-color: #007bff;
+  color: #007bff;
+}
+
+.claims-raw {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 0.9rem;
+  resize: vertical;
+}
+
+.claims-editor {
+  text-align: left;
+}
+
+.claim-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 6px;
+  align-items: center;
+}
+
+.claim-key {
+  flex: 1;
+  min-width: 0;
+}
+
+.claim-value {
+  flex: 2;
+  min-width: 0;
+}
+
+.claim-key,
+.claim-value {
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  font-family: monospace;
+}
+
+.claim-remove {
+  background: none;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  color: #999;
+  cursor: pointer;
+  font-size: 1rem;
+  padding: 4px 8px;
+  text-transform: none;
+  font-weight: normal;
+}
+
+.claim-remove:hover {
+  background-color: #fee;
+  border-color: #e99;
+  color: #c00;
+}
+
+.claim-add-row {
+  margin-top: 4px;
+}
+
+.claim-add {
+  background: none;
+  border: 1px dashed #ccc;
+  border-radius: 4px;
+  color: #666;
+  cursor: pointer;
+  font-size: 0.85rem;
+  padding: 6px 12px;
+  text-transform: none;
+  font-weight: normal;
+  width: 100%;
+}
+
+.claim-add:hover {
+  background-color: #f0f7ff;
+  border-color: #007bff;
+  color: #007bff;
 }
