@@ -248,6 +248,30 @@ async def login(
     )
 
 
+def create_token(username: str, scopes: str, custom_claims: dict = None):
+    """Generate a JWT token with the specified parameters."""
+    now = datetime.now(UTC)
+
+    claims = {
+        "iss": ISSUER,
+        "sub": username,
+        "iat": now,
+        "exp": now + timedelta(minutes=15),
+        "scope": scopes,
+        "kid": KEY_PAIR.key_id,
+        **(custom_claims or {}),
+    }
+
+    token = jwt.encode(
+        claims,
+        KEY_PAIR.private_key,
+        algorithm="RS256",
+        headers={"kid": KEY_PAIR.key_id},
+    )
+
+    return token, claims
+
+
 @app.get("/")
 async def token_form(request: Request):
     """Show token generation form."""
@@ -276,25 +300,7 @@ async def generate_token(
     if not isinstance(custom_claims, dict):
         raise HTTPException(status_code=400, detail="Claims must be a JSON object")
 
-    now = datetime.now(UTC)
-    expires_delta = timedelta(minutes=15)
-
-    token_body = {
-        **custom_claims,
-        "iss": ISSUER,
-        "sub": username,
-        "iat": now,
-        "exp": now + expires_delta,
-        "scope": scopes,
-        "kid": KEY_PAIR.key_id,
-    }
-
-    token = jwt.encode(
-        token_body,
-        KEY_PAIR.private_key,
-        algorithm="RS256",
-        headers={"kid": KEY_PAIR.key_id},
-    )
+    token, token_body = create_token(username, scopes, custom_claims)
 
     # Convert datetime objects for JSON display
     token_body_display = {
@@ -313,7 +319,28 @@ async def generate_token(
     )
 
 
-@app.post("/token", name="token")
+@app.post("/token/direct")
+async def token_direct(request: Request):
+    """Generate a JWT token directly for programmatic access, bypassing OAuth flow."""
+    body = await request.json() if await request.body() else {}
+
+    token, _ = create_token(
+        username=body.get("username", "user123"),
+        scopes=body.get("scopes", "openid profile"),
+        custom_claims=body.get("claims"),
+    )
+
+    decoded = jwt.get_unverified_claims(token)
+
+    return {
+        "access_token": token,
+        "token_type": "Bearer",
+        "expires_in": 900,
+        "token_body": decoded,
+    }
+
+
+@app.post("/token")
 async def token(
     grant_type: str = Form(...),
     code: str = Form(...),

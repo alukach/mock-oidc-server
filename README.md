@@ -46,6 +46,7 @@ The server can be configured using environment variables:
 - `/.well-known/jwks.json`: JSON Web Key Set endpoint
 - `/authorize`: Authorization endpoint
 - `/token`: Token endpoint
+- `/token/direct`: Direct token generation endpoint (bypasses OAuth flow)
 
 ## Warning
 
