@@ -302,6 +302,9 @@ async def generate_token(
         for k, v in token_body.items()
     }
 
+    if "application/json" in request.headers.get("accept", ""):
+        return JSONResponse({"token": token, "token_body": token_body_display})
+
     return templates.TemplateResponse(
         "token.html",
         {
